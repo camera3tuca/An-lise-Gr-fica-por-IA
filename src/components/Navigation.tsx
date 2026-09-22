@@ -60,7 +60,6 @@ export const Navigation: React.FC<Props> = ({
     { id: 'movers', label: 'Top Movers', shortLabel: 'Movers', icon: BarChart3 },
     { id: 'news', label: 'Notícias & Sentimento', shortLabel: 'Notícias', icon: Newspaper },
     { id: 'upload', label: 'Enviar Gráfico', shortLabel: 'Print IA', icon: ImageIcon },
-    { id: 'playstore', label: 'Google Play Store', shortLabel: 'Play Store', icon: Smartphone },
   ];
 
   return (

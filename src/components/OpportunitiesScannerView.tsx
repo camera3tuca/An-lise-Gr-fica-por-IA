@@ -62,6 +62,10 @@ export const OpportunitiesScannerView: React.FC<Props> = ({ onSelectTicker }) =>
   const [searchQuery, setSearchQuery] = useState('');
   const [error, setError] = useState<string | null>(null);
 
+  // AI reading over the whole scanned universe
+  const [aiScanText, setAiScanText] = useState<string | null>(null);
+  const [aiScanLoading, setAiScanLoading] = useState(false);
+
   // Guide panel toggle state
   const [isGuideOpen, setIsGuideOpen] = useState(true);
 
@@ -93,6 +97,28 @@ export const OpportunitiesScannerView: React.FC<Props> = ({ onSelectTicker }) =>
   useEffect(() => {
     fetchScannerData(false);
   }, [fetchScannerData]);
+
+  // Ask the AI to review the scanned universe and highlight the best setups.
+  const runAiScan = useCallback(async () => {
+    setAiScanLoading(true);
+    try {
+      const res = await fetch('/api/ai/scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ language: 'Português', limit: 12 }),
+      });
+      const data = await res.json();
+      if (data.needsScan) {
+        setAiScanText('Rode a varredura primeiro (botão "Escanear Agora") para a IA analisar as oportunidades.');
+      } else {
+        setAiScanText(data.analysis || 'A IA não retornou análise.');
+      }
+    } catch {
+      setAiScanText('Não foi possível gerar a análise por IA agora.');
+    } finally {
+      setAiScanLoading(false);
+    }
+  }, []);
 
   // Unique sectors from current opportunities
   const availableSectors = useMemo(() => {
@@ -236,6 +262,17 @@ export const OpportunitiesScannerView: React.FC<Props> = ({ onSelectTicker }) =>
               {isGuideOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
             </button>
 
+            {/* Analyze all opportunities with AI */}
+            <button
+              onClick={runAiScan}
+              disabled={aiScanLoading || loading}
+              className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-[#14201A] border border-[#00E6A0]/40 text-[#00E6A0] font-bold text-xs tracking-wide hover:bg-[#00E6A0]/10 active:scale-95 transition cursor-pointer disabled:opacity-50"
+              title="A IA revisa todos os ativos varridos e destaca os melhores setups"
+            >
+              <Sparkles className={`w-3.5 h-3.5 ${aiScanLoading ? 'animate-pulse' : ''}`} />
+              {aiScanLoading ? 'Analisando...' : 'Analisar com IA'}
+            </button>
+
             {/* Refresh Button */}
             <button
               onClick={() => fetchScannerData(true)}
@@ -319,6 +356,33 @@ export const OpportunitiesScannerView: React.FC<Props> = ({ onSelectTicker }) =>
         <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs flex items-center gap-3">
           <ShieldAlert className="w-4 h-4 shrink-0" />
           <span>{error}</span>
+        </div>
+      )}
+
+      {/* AI reading over the scanned universe */}
+      {(aiScanText || aiScanLoading) && (
+        <div className="bg-[#14201A] border border-[#22332B] rounded-2xl p-4 md:p-5 space-y-3">
+          <div className="flex items-center gap-2 border-b border-[#22332B] pb-2.5">
+            <div className="w-8 h-8 rounded-lg bg-[#00E6A0]/10 border border-[#00E6A0]/30 flex items-center justify-center text-[#00E6A0]">
+              <Sparkles className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-white">Panorama das Oportunidades por IA</h3>
+              <p className="text-[11px] text-[#8FA79B]">
+                A IA revisa os ativos varridos e destaca os melhores setups · Gemini 3.8 Flash
+              </p>
+            </div>
+          </div>
+          {aiScanLoading ? (
+            <div className="py-8 text-center space-y-2">
+              <div className="w-7 h-7 border-2 border-[#00E6A0] border-t-transparent rounded-full animate-spin mx-auto" />
+              <p className="text-xs text-[#8FA79B]">A IA está analisando as oportunidades varridas...</p>
+            </div>
+          ) : (
+            <div className="text-xs leading-relaxed text-[#CDD9D3] whitespace-pre-line bg-[#0D1612] p-4 rounded-xl border border-[#1E2E25]">
+              {aiScanText}
+            </div>
+          )}
         </div>
       )}
 

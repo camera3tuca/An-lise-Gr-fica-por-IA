@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Header } from './components/Header';
 import { Navigation, ActiveTab } from './components/Navigation';
 import { CandlestickChart } from './components/CandlestickChart';
@@ -7,10 +7,10 @@ import { SignalsTable } from './components/SignalsTable';
 import { RiskManagement } from './components/RiskManagement';
 import { PatternsAndLevels } from './components/PatternsAndLevels';
 import { AIAnalysisModal } from './components/AIAnalysisModal';
+import { AiAnalysisSection } from './components/AiAnalysisSection';
 import { TopMoversView } from './components/TopMoversView';
 import { NewsSentimentsView } from './components/NewsSentimentsView';
 import { ChartUploadView } from './components/ChartUploadView';
-import { PlayStoreGuideView } from './components/PlayStoreGuideView';
 import { OpportunitiesScannerView } from './components/OpportunitiesScannerView';
 import { MarketHistoryResponse } from './types';
 import { useOnlineStatus } from './hooks/useOnlineStatus';
@@ -43,6 +43,11 @@ export const App: React.FC = () => {
 
   // AI Modal State
   const [isAIModalOpen, setIsAIModalOpen] = useState(false);
+
+  // Inline AI Analysis (centerpiece per asset)
+  const [aiText, setAiText] = useState<string | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiLanguage] = useState('Português');
 
   // Auto Refresh State
   const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
@@ -135,6 +140,55 @@ export const App: React.FC = () => {
     setMarketType(newMarket);
     setTicker(newTicker);
   };
+
+  // Keep a ref to the freshest market data so the AI runner avoids stale closures.
+  const marketDataRef = useRef(marketData);
+  marketDataRef.current = marketData;
+
+  // Generate the inline AI reading for the currently loaded asset.
+  const runAiAnalysis = useCallback(async () => {
+    const md = marketDataRef.current;
+    if (!md) return;
+    setAiLoading(true);
+    try {
+      const last = md.candles[md.candles.length - 1];
+      const payload = {
+        ticker: md.ticker,
+        language: aiLanguage,
+        currentPrice: last?.close,
+        rsi: last?.RSI,
+        atr: last?.ATR,
+        sma200: last?.SMA200,
+        sma20: last?.SMA20,
+        signals: md.signals.map((s) => `${s.nome}: ${s.sinal} (${s.detalhe})`),
+        stop: md.stopTarget?.stop,
+        alvo: md.stopTarget?.alvo,
+      };
+      const res = await fetch('/api/ai/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error('Falha ao gerar análise por IA.');
+      const data = await res.json();
+      setAiText(data.analysis || data.text || null);
+    } catch {
+      setAiText(null);
+    } finally {
+      setAiLoading(false);
+    }
+  }, [aiLanguage]);
+
+  // Auto-generate the AI reading whenever the asset or timeframe changes
+  // (not on auto-refresh or indicator toggles), keeping the IA reading as the
+  // centerpiece for whichever asset is open.
+  useEffect(() => {
+    setAiText(null);
+    if (marketData?.ticker) {
+      runAiAnalysis();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [marketData?.ticker, period, interval]);
 
   return (
     <div className="min-h-screen bg-[#0A100D] text-[#EAF3EE] flex flex-col pb-16 lg:pb-0">
@@ -307,6 +361,15 @@ export const App: React.FC = () => {
                 stopTarget={marketData.stopTarget}
               />
 
+              {/* AI graphical reading — centerpiece for the open asset */}
+              <AiAnalysisSection
+                ticker={marketData.ticker}
+                aiText={aiText}
+                isLoading={aiLoading}
+                onGenerate={runAiAnalysis}
+                language={aiLanguage}
+              />
+
               {/* Signals & Risk Management */}
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
                 <div className="lg:col-span-7">
@@ -354,9 +417,6 @@ export const App: React.FC = () => {
 
           {/* TAB 4: Chart Screenshot Upload with AI Vision */}
           {activeTab === 'upload' && <ChartUploadView />}
-
-          {/* TAB 5: Google Play Store Publishing & Excellence Guide */}
-          {activeTab === 'playstore' && <PlayStoreGuideView />}
         </main>
       </div>
 

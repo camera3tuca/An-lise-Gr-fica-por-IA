@@ -1,3 +1,10 @@
+# Node / build
+node_modules/
+dist/
+package-lock.json
+*.local
+
+# Python (legado)
 __pycache__/
 *.pyc
 .venv/
