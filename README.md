@@ -39,9 +39,13 @@ Aplicativo profissional de **análise técnica de gráficos da bolsa de valores 
 - **Notícias e Sentimento em Tempo Real**:
   - Varredura de manchetes financeiras via RSS do Google Notícias.
   - Classificação algorítmica de sentimento (*Bullish*, *Bearish*, *Neutral*) e medidor geral.
-- **Inteligência Artificial Google Gemini**:
-  - Leitura técnica estruturada com o modelo multimodal **Gemini 3.8 Flash**.
-  - Scanner visual de gráficos: envio de screenshots de plataformas de trading (TradingView, Profit, MetaTrader) para análise técnica visual por IA.
+- **Inteligência Artificial Google Gemini (foco central do app)**:
+  - **Leitura gráfica automática por IA** de qualquer ativo: ao abrir um ticker, a análise técnica estruturada é gerada automaticamente com o modelo multimodal **Gemini 3.8 Flash**, como destaque principal da tela de Análise.
+  - **Varredura de todos os ativos pela IA**: na aba *Varredura & Oportunidades*, o botão **"Analisar com IA"** faz o Gemini revisar todo o universo já pontuado pelo scanner e destacar as melhores oportunidades de swing (endpoint `/api/ai/scan`).
+  - **Scanner visual de gráficos**: envio de screenshots de plataformas de trading (TradingView, Profit, MetaTrader) para análise técnica visual por IA.
+  - Fallback local: sem `GEMINI_API_KEY`, o app entrega um resumo técnico determinístico para não ficar sem resposta.
+
+> ℹ️ O guia de publicação na Play Store saiu da navegação do app (permanece nesta documentação); o preparo PWA/TWA — manifesto, ícones e `assetlinks.json` — continua intacto.
 
 ---
 

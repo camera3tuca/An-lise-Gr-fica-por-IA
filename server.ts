@@ -943,6 +943,77 @@ Forneça uma análise técnica visual detalhada em ${language} com os seguintes 
 });
 
 // -------------------------------------------------------------
+// Endpoint 6: AI reading across ALL scanned assets (opportunities)
+// The scanner pre-filters/scores the universe; the AI then reviews the
+// top candidates and highlights the best swing opportunities.
+// -------------------------------------------------------------
+app.post('/api/ai/scan', async (req, res) => {
+  const { language = 'Português', limit = 8 } = req.body || {};
+  const source: any[] = scannerCache?.opportunities || [];
+  const top = source
+    .filter((o: any) => o.sinal === 'COMPRA FORTE' || o.sinal === 'COMPRA' || o.sinal === 'VENDA')
+    .slice(0, Math.max(1, Math.min(20, Number(limit) || 8)));
+
+  if (top.length === 0) {
+    return res.json({ analysis: null, needsScan: true });
+  }
+
+  const linhas = top
+    .map(
+      (o: any, i: number) =>
+        `${i + 1}. ${o.ticker} (${o.categoria}) — ${o.setup} | Sinal: ${o.sinal} | Score ${o.score} | Preço ${o.preco} | RSI14 ${o.rsi14} | IFR2 ${o.ifr2} | Stop ${o.stopLoss} | Alvo ${o.alvoLucro}`
+    )
+    .join('\n');
+
+  const prompt = `Você é um analista técnico sênior especialista em Swing Trade. A varredura automática de mercado abaixo já pré-filtrou e pontuou os ativos por setups técnicos. Analise o conjunto e escreva, em ${language}:
+
+1. Panorama geral do mercado varrido (viés predominante: comprador, vendedor ou neutro).
+2. As 3 a 5 MELHORES oportunidades de swing trade, em ordem de preferência, explicando em 1-2 linhas por que cada uma se destaca (confluência de setup, momento, risco/retorno).
+3. Alertas de risco (ativos esticados ou sinais fracos que exigem cautela).
+
+Seja objetivo e cite os tickers. Finalize com um aviso de que é conteúdo educativo e não recomendação de investimento.
+
+Ativos varridos (ordenados por score):
+${linhas}`;
+
+  try {
+    const ai = getGeminiClient();
+    if (ai) {
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.8-flash',
+        contents: prompt,
+      });
+      const text = response.text;
+      if (text) {
+        return res.json({ analysis: text, analisados: top.length });
+      }
+    }
+  } catch (err) {
+    console.error('Erro Gemini Scan:', err);
+  }
+
+  // Deterministic fallback when no Gemini key is configured.
+  const fmt = (o: any) => `${o.ticker} (${o.setup}, score ${o.score})`;
+  const compras = top.filter((o: any) => o.sinal === 'COMPRA FORTE' || o.sinal === 'COMPRA');
+  const vendas = top.filter((o: any) => o.sinal === 'VENDA');
+  const fallback = `### Panorama por IA (resumo local)
+Foram varridos **${top.length}** ativos com sinal técnico relevante.
+
+**Melhores oportunidades de compra:**
+${
+    compras.slice(0, 5).map((o: any, i: number) => `${i + 1}. ${fmt(o)} — entrada ${o.preco}, stop ${o.stopLoss}, alvo ${o.alvoLucro}.`).join('\n') ||
+    'Nenhuma no momento.'
+  }
+
+**Atenção / viés vendedor:**
+${vendas.slice(0, 3).map((o: any) => `- ${fmt(o)} — resistência técnica; cautela para compras.`).join('\n') || 'Sem alertas relevantes.'}
+
+*(Aviso: conteúdo educativo, não é recomendação de investimento. Configure a GEMINI_API_KEY para a leitura completa por IA.)*`;
+
+  res.json({ analysis: fallback, analisados: top.length });
+});
+
+// -------------------------------------------------------------
 // Digital Asset Links for Google Play Store TWA
 // -------------------------------------------------------------
 app.get('/.well-known/assetlinks.json', (req, res) => {
