@@ -1,0 +1,8 @@
+{
+  "name": "Análise gráfica da bolsa de valores por IA",
+  "description": "Análise gráfica da bolsa de valores por IA para operações de Swing Trade",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
