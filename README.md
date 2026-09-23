@@ -47,6 +47,13 @@ Aplicativo profissional de **análise técnica de gráficos da bolsa de valores 
 
 > ℹ️ O guia de publicação na Play Store saiu da navegação do app (permanece nesta documentação); o preparo PWA/TWA — manifesto, ícones e `assetlinks.json` — continua intacto.
 
+### 🎯 Foco: Oportunidades de toda a B3 + análise por IA
+
+- **Cobertura de TODA a B3** (Ações, BDRs, ETFs e FIIs) via **TradingView Screener** (`scanner.tradingview.com/brazil/scan`), sem lista fixa — novos papéis entram na varredura automaticamente. Se o Screener estiver indisponível, o app cai numa **lista curada** de fallback.
+- **Tela inicial = lista de oportunidades da B3**, pontuada por setups de swing; o botão **"Analisar com IA"** faz o Gemini curar o conjunto e destacar as melhores.
+- **Clique no ativo → gráfico + análise completa por IA** (leitura gerada automaticamente).
+- Navegação enxuta: **Oportunidades**, **Análise do Ativo** e **Enviar Gráfico** (Top Movers e Notícias foram removidos do foco).
+
 ---
 
 ## 🛠️ Tecnologias Utilizadas

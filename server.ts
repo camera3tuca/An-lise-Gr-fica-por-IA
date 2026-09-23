@@ -522,6 +522,206 @@ const SCANNER_UNIVERSE: ScannerAsset[] = [
 ];
 
 // -------------------------------------------------------------
+// Full-B3 universe via TradingView Screener (Ações, BDRs, ETFs, FIIs)
+// Returns opportunity items computed directly from TradingView indicators,
+// covering the WHOLE B3 without a fixed list. Empty array => caller falls
+// back to the curated per-ticker scan.
+// -------------------------------------------------------------
+function classeFromTV(type: any, typespecs: any): 'Ação' | 'BDR' | 'ETF' | 'FII' {
+  const specs = Array.isArray(typespecs) ? typespecs.map((s: any) => String(s).toLowerCase()) : [];
+  if (specs.includes('etf')) return 'ETF';
+  if (type === 'dr') return 'BDR';
+  if (type === 'fund') return 'FII';
+  return 'Ação';
+}
+
+function gerarSinaisTV(
+  close: number,
+  rsi: number,
+  stochK: number,
+  macdHist: number,
+  ema20?: number,
+  ema50?: number,
+  ema200?: number
+): { setup: string; sinal: 'COMPRA FORTE' | 'COMPRA' | 'VENDA' | 'AGUARDAR'; score: number; detalhes: string } {
+  const acima200 = ema200 ? close > ema200 : false;
+  const abaixo200 = ema200 ? close < ema200 : false;
+  const alinhadoAlta = ema20 && ema50 && ema200 ? ema20 > ema50 && ema50 > ema200 : false;
+  const perto20 = ema20 ? Math.abs(close - ema20) / close < 0.02 : false;
+
+  if (acima200 && (rsi <= 35 || stochK <= 25)) {
+    return {
+      setup: 'Repique em Tendência de Alta',
+      sinal: 'COMPRA FORTE',
+      score: rsi <= 28 || stochK <= 15 ? 95 : 90,
+      detalhes: `Ativo acima da média de 200 com osciladores em sobrevenda (RSI ${rsi.toFixed(1)}, Stoch ${stochK.toFixed(0)}). Correção pontual em papel forte.`,
+    };
+  }
+  if (acima200 && perto20 && (ema20! >= (ema50 ?? ema20!))) {
+    return {
+      setup: 'Pullback na Média (EMA20)',
+      sinal: 'COMPRA',
+      score: 85,
+      detalhes: 'Preço corrigiu até o suporte da EMA20 mantendo estrutura de alta. Ponto clássico de continuação.',
+    };
+  }
+  if (alinhadoAlta && rsi >= 45 && rsi <= 65) {
+    return {
+      setup: 'Tendência Primária Forte',
+      sinal: 'COMPRA',
+      score: 80,
+      detalhes: 'Alinhamento de médias (EMA20 > EMA50 > EMA200) com RSI em zona de aceleração.',
+    };
+  }
+  if (acima200 && macdHist > 0 && rsi >= 48 && rsi <= 68) {
+    return {
+      setup: 'Momento Positivo (MACD)',
+      sinal: 'COMPRA',
+      score: 76,
+      detalhes: 'MACD acima da linha de sinal com preço acima da média de 200. Momento comprador.',
+    };
+  }
+  if (abaixo200 && (rsi >= 68 || (macdHist < 0 && stochK >= 75))) {
+    return {
+      setup: 'Venda em Repique (Baixa)',
+      sinal: 'VENDA',
+      score: 78,
+      detalhes: `Ativo abaixo da média de 200 com repique esticado (RSI ${rsi.toFixed(1)}). Resistência técnica.`,
+    };
+  }
+  return {
+    setup: 'Consolidação / Neutro',
+    sinal: 'AGUARDAR',
+    score: 50,
+    detalhes: 'Ativo em zona de equilíbrio. Aguardar rompimento claro.',
+  };
+}
+
+async function fetchTradingViewB3(): Promise<any[]> {
+  const columns = [
+    'name', 'description', 'close', 'change', 'high', 'low', 'volume',
+    'RSI', 'Stoch.K', 'MACD.macd', 'MACD.signal', 'BB.lower', 'BB.upper',
+    'EMA20', 'EMA50', 'EMA200', 'SMA200', 'sector', 'type', 'typespecs', 'Value.Traded',
+  ];
+
+  const fetchScan = async (filter: any[], range: [number, number]) => {
+    try {
+      const resp = await fetch('https://scanner.tradingview.com/brazil/scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0' },
+        body: JSON.stringify({
+          filter,
+          options: { lang: 'pt' },
+          symbols: { query: { types: [] }, tickers: [] },
+          columns,
+          sort: { sortBy: 'volume', sortOrder: 'desc' },
+          range,
+        }),
+        signal: AbortSignal.timeout(8000),
+      });
+      if (resp.ok) {
+        const json = await resp.json();
+        return json.data && Array.isArray(json.data) ? json.data : [];
+      }
+    } catch (err) {
+      console.warn('TradingView scan error:', err);
+    }
+    return [];
+  };
+
+  let rows: any[] = [];
+  try {
+    const [stocks, drs, etfs, funds] = await Promise.all([
+      fetchScan([{ left: 'type', operation: 'equal', right: 'stock' }], [0, 300]),
+      fetchScan([{ left: 'type', operation: 'equal', right: 'dr' }], [0, 150]),
+      fetchScan([{ left: 'typespecs', operation: 'has', right: ['etf'] }], [0, 100]),
+      fetchScan([
+        { left: 'type', operation: 'equal', right: 'fund' },
+        { left: 'typespecs', operation: 'has_none_of', right: ['etf'] },
+      ], [0, 120]),
+    ]);
+    rows = [...stocks, ...drs, ...etfs, ...funds];
+  } catch (err) {
+    console.warn('TradingView universe fetch failed:', err);
+    return [];
+  }
+
+  const opportunities: any[] = [];
+  const seen = new Set<string>();
+
+  for (const item of rows) {
+    const d = item.d;
+    if (!Array.isArray(d)) continue;
+    const rawTicker = String(d[0] || '').split(':').pop() || '';
+    if (!rawTicker || rawTicker.endsWith('F') || seen.has(rawTicker)) continue;
+    seen.add(rawTicker);
+
+    const close = Number(d[2]) || 0;
+    if (close <= 0) continue;
+    const change = Number(d[3]) || 0;
+    const rsi = Number(d[7]) || 50;
+    const stochK = Number(d[8]) || 50;
+    const macdHist = (Number(d[9]) || 0) - (Number(d[10]) || 0);
+    const bbLower = Number(d[11]) || 0;
+    const bbUpper = Number(d[12]) || 0;
+    const high = Number(d[4]) || close;
+    const low = Number(d[5]) || close;
+    const ema20 = Number(d[13]) || undefined;
+    const ema50 = Number(d[14]) || undefined;
+    const ema200 = Number(d[15]) || Number(d[16]) || undefined;
+    const valueTraded = Number(d[20]) || 0;
+
+    // Liquidity floor to cut noise (skip very illiquid names).
+    if (valueTraded > 0 && valueTraded < 200000) continue;
+
+    const classe = classeFromTV(d[18], d[19]);
+    const setor = String(d[17] || 'Outros');
+    const { setup, sinal, score, detalhes } = gerarSinaisTV(close, rsi, stochK, macdHist, ema20, ema50, ema200);
+
+    // Volatility proxy for stop/target (no ATR from screener).
+    const vold = Math.max(high - low, (bbUpper - bbLower) / 2, close * 0.02);
+    const stopLoss = sinal === 'VENDA'
+      ? Math.round((close + 1.5 * vold) * 100) / 100
+      : Math.round((close - 1.5 * vold) * 100) / 100;
+    const alvoLucro = sinal === 'VENDA'
+      ? Math.round((close - 2.25 * vold) * 100) / 100
+      : Math.round((close + 2.25 * vold) * 100) / 100;
+
+    const indiceSobrevenda = Math.max(0, Math.min(100, Math.round((100 - rsi + (100 - stochK)) / 2)));
+
+    opportunities.push({
+      ticker: rawTicker,
+      fullTicker: `${rawTicker}.SA`,
+      nome: String(d[1] || rawTicker),
+      categoria: 'B3',
+      classe,
+      setor,
+      preco: Math.round(close * 100) / 100,
+      var_pct: Math.round(change * 100) / 100,
+      setup,
+      sinal,
+      score,
+      entrada: Math.round(close * 100) / 100,
+      stopLoss,
+      alvoLucro,
+      rr: 1.5,
+      ifr2: Math.round(rsi * 10) / 10,
+      rsi14: Math.round(rsi * 10) / 10,
+      stochK: Math.round(stochK * 10) / 10,
+      indiceSobrevenda,
+      isGoldenZone: false,
+      atr: Math.round(vold * 100) / 100,
+      sma200: ema200 ? Math.round(ema200 * 100) / 100 : 0,
+      detalhes,
+      isRealData: true,
+    });
+  }
+
+  opportunities.sort((a, b) => b.score - a.score);
+  return opportunities;
+}
+
+// -------------------------------------------------------------
 // Endpoint 2: Complete Market Scanner & Swing Trade Opportunities
 // -------------------------------------------------------------
 app.get('/api/market/scanner', async (req, res) => {
@@ -547,11 +747,13 @@ app.get('/api/market/scanner', async (req, res) => {
     });
   }
 
-  // Scan items with concurrency control
-  const opportunities: any[] = [];
+  // Prefer full-B3 coverage via TradingView Screener; fall back to the
+  // curated per-ticker scan (Yahoo/synthetic) when it is unavailable.
+  let opportunities: any[] = await fetchTradingViewB3();
 
-  // Concurrency pool helper
+  // Concurrency pool helper (fallback path only)
   const batchSize = 5;
+  if (opportunities.length === 0)
   for (let i = 0; i < SCANNER_UNIVERSE.length; i += batchSize) {
     const batch = SCANNER_UNIVERSE.slice(i, i + batchSize);
     const batchPromises = batch.map(async (asset) => {

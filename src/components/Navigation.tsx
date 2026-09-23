@@ -61,10 +61,8 @@ export const Navigation: React.FC<Props> = ({
   isProUser = false,
 }) => {
   const tabs: TabItem[] = [
-    { id: 'analysis', label: 'Análise Técnica', shortLabel: 'Análise', icon: TrendingUp },
-    { id: 'scanner', label: 'Varredura & Oportunidades', shortLabel: 'Varredura', icon: Radar, highlight: true },
-    { id: 'movers', label: 'Top Movers', shortLabel: 'Movers', icon: BarChart3 },
-    { id: 'news', label: 'Notícias & Sentimento', shortLabel: 'Notícias', icon: Newspaper },
+    { id: 'scanner', label: 'Oportunidades da B3', shortLabel: 'Oportunidades', icon: Radar, highlight: true },
+    { id: 'analysis', label: 'Análise do Ativo', shortLabel: 'Análise', icon: TrendingUp },
     { id: 'upload', label: 'Enviar Gráfico', shortLabel: 'Print IA', icon: ImageIcon },
   ];
 

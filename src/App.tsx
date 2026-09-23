@@ -8,8 +8,6 @@ import { RiskManagement } from './components/RiskManagement';
 import { PatternsAndLevels } from './components/PatternsAndLevels';
 import { AIAnalysisModal } from './components/AIAnalysisModal';
 import { AiAnalysisSection } from './components/AiAnalysisSection';
-import { TopMoversView } from './components/TopMoversView';
-import { NewsSentimentsView } from './components/NewsSentimentsView';
 import { ChartUploadView } from './components/ChartUploadView';
 import { OpportunitiesScannerView } from './components/OpportunitiesScannerView';
 import { CapaOpportunitySelector } from './components/CapaOpportunitySelector';
@@ -28,8 +26,8 @@ import {
 import { AlertCircle, RefreshCw, Calendar, Clock, SlidersHorizontal, ArrowUpRight, ArrowDownRight, Sparkles, Target, Radar, Crown, Calculator, Bot } from 'lucide-react';
 
 export const App: React.FC = () => {
-  // Navigation & View state
-  const [activeTab, setActiveTab] = useState<ActiveTab>('analysis');
+  // Navigation & View state — home is the B3 opportunities list
+  const [activeTab, setActiveTab] = useState<ActiveTab>('scanner');
 
   // Subscriber & Risk Management VIP state
   const [isSubscriberModalOpen, setIsSubscriberModalOpen] = useState(false);
@@ -536,13 +534,7 @@ export const App: React.FC = () => {
             />
           )}
 
-          {/* TAB 3: Top Movers */}
-          {activeTab === 'movers' && <TopMoversView />}
-
-          {/* TAB 3: News & Sentiments */}
-          {activeTab === 'news' && <NewsSentimentsView />}
-
-          {/* TAB 4: Chart Screenshot Upload with AI Vision */}
+          {/* TAB: Chart Screenshot Upload with AI Vision */}
           {activeTab === 'upload' && <ChartUploadView />}
         </main>
       </div>
