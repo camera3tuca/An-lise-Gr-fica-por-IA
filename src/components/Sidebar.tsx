@@ -385,7 +385,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 className="w-full mt-1 bg-[#00E6A0] hover:bg-[#00c98b] text-[#08130D] font-bold py-2 px-3 rounded-lg text-xs flex items-center justify-center gap-1.5 transition-all shadow-sm active:scale-[0.98] disabled:opacity-50"
               >
                 <Sparkles className={`w-3.5 h-3.5 ${isAiLoading ? 'animate-spin' : ''}`} />
-                <span>{isAiLoading ? 'Gerando leitura...' : '🤖 Gerar leitura por IA'}</span>
+                <span>{isAiLoading ? 'Analisando Gráfico com IA...' : '🤖 Analisar Gráfico com IA'}</span>
               </button>
             </div>
           </div>

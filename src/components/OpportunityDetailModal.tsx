@@ -18,6 +18,7 @@ import {
   Calendar,
   Layers,
   Activity,
+  Radar,
 } from 'lucide-react';
 import { CandlestickChart } from './CandlestickChart';
 import { OpportunityItem, ProcessedCandle, SupportResistanceLevels, StopTarget } from '../types';
@@ -32,6 +33,7 @@ interface Props {
   currentIndex?: number;
   totalCount?: number;
   onOpenFullAnalysis: (ticker: string, market: 'B3' | 'EUA') => void;
+  currentCapaTicker?: string;
 }
 
 export const OpportunityDetailModal: React.FC<Props> = ({
@@ -43,6 +45,7 @@ export const OpportunityDetailModal: React.FC<Props> = ({
   currentIndex,
   totalCount,
   onOpenFullAnalysis,
+  currentCapaTicker,
 }) => {
   const [candles, setCandles] = useState<ProcessedCandle[]>([]);
   const [loading, setLoading] = useState(false);
@@ -599,10 +602,14 @@ IFR2: ${opportunity.ifr2} | RSI14: ${opportunity.rsi14} | ATR: R$ ${opportunity.
               <div className="space-y-2 pt-1">
                 <button
                   onClick={handleOpenFull}
-                  className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-gradient-to-r from-[#00E6A0] to-[#00B37E] text-[#0A100D] font-extrabold text-xs tracking-wide hover:brightness-110 active:scale-98 transition shadow-lg shadow-[#00E6A0]/20 cursor-pointer"
+                  className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-gradient-to-r from-[#00E6A0] to-[#00B37E] text-[#0A100D] font-black text-xs tracking-wide hover:brightness-110 active:scale-98 transition shadow-lg shadow-[#00E6A0]/20 cursor-pointer"
                 >
-                  <ExternalLink className="w-4 h-4" />
-                  Abrir Análise Técnica Completa
+                  <Radar className="w-4 h-4" />
+                  <span>
+                    {opportunity && currentCapaTicker && opportunity.ticker.toUpperCase() === currentCapaTicker.toUpperCase()
+                      ? 'Ativo Atual da Capa (Abrir Análise)'
+                      : 'Exibir como Ação da Capa (Análise Completa)'}
+                  </span>
                 </button>
 
                 <button

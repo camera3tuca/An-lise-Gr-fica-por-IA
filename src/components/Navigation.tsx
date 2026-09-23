@@ -7,8 +7,10 @@ import {
   Image as ImageIcon,
   Smartphone,
   Bot,
-  Sliders,
   Eye,
+  Crown,
+  Calculator,
+  Shield,
 } from 'lucide-react';
 import { ScienceBitLogo } from './ScienceBitLogo';
 
@@ -29,6 +31,8 @@ interface Props {
   showLevels: boolean;
   setShowLevels: (val: boolean) => void;
   onOpenAIModal: () => void;
+  onOpenSubscriberArea?: () => void;
+  isProUser?: boolean;
 }
 
 interface TabItem {
@@ -53,6 +57,8 @@ export const Navigation: React.FC<Props> = ({
   showLevels,
   setShowLevels,
   onOpenAIModal,
+  onOpenSubscriberArea,
+  isProUser = false,
 }) => {
   const tabs: TabItem[] = [
     { id: 'analysis', label: 'Análise Técnica', shortLabel: 'Análise', icon: TrendingUp },
@@ -65,11 +71,11 @@ export const Navigation: React.FC<Props> = ({
   return (
     <>
       {/* Desktop Sidebar */}
-      <aside className="hidden lg:flex flex-col w-64 bg-[#0D1612] border-r border-[#1E2E25] p-4 shrink-0 min-h-[calc(100vh-61px)] space-y-6">
+      <aside className="hidden lg:flex flex-col w-64 bg-[#0D1612] border-r border-[#1E2E25] p-4 shrink-0 min-h-[calc(100vh-61px)] space-y-5">
         {/* Navigation Section */}
         <div className="space-y-1">
-          <div className="text-[10px] uppercase font-bold tracking-wider text-zinc-400 px-3 mb-2">
-            Páginas do App
+          <div className="text-[10px] uppercase font-bold tracking-wider text-zinc-400 px-2 mb-2">
+            Módulos do Sistema
           </div>
           {tabs.map((tab) => {
             const Icon = tab.icon;
@@ -78,14 +84,14 @@ export const Navigation: React.FC<Props> = ({
               <button
                 key={tab.id}
                 onClick={() => onTabChange(tab.id)}
-                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition cursor-pointer ${
                   isActive
-                    ? 'bg-[#00E6A0] text-[#0A100D] shadow-md shadow-[#00E6A0]/15'
-                    : 'text-zinc-300 hover:text-white hover:bg-[#14201A]'
+                    ? 'bg-[#14261C] text-[#00E6A0] border border-[#00E6A0]/30 shadow-sm'
+                    : 'text-zinc-300 hover:bg-[#121F17] hover:text-white'
                 }`}
               >
                 <div className="flex items-center gap-2.5">
-                  <Icon className={`w-4 h-4 ${isActive ? 'text-[#0A100D]' : tab.highlight ? 'text-[#00E6A0]' : 'text-zinc-400'}`} />
+                  <Icon className={`w-4 h-4 ${isActive ? 'text-[#00E6A0]' : 'text-zinc-400'}`} />
                   <span>{tab.label}</span>
                 </div>
                 {tab.highlight && !isActive && (
@@ -97,14 +103,34 @@ export const Navigation: React.FC<Props> = ({
         </div>
 
         {/* AI Action Trigger Button */}
-        <div className="pt-2">
+        <div className="space-y-2 pt-1">
           <button
             onClick={onOpenAIModal}
             className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-[#00E6A0]/20 to-[#00B37E]/10 border border-[#00E6A0]/40 text-[#00E6A0] hover:bg-[#00E6A0]/25 text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer shadow-sm"
           >
             <Bot className="w-4 h-4" />
-            <span>Gerar Leitura por IA</span>
+            <span>Analisar Gráfico com IA</span>
           </button>
+
+          {/* Subscriber & Risk Calculator Button */}
+          {onOpenSubscriberArea && (
+            <button
+              onClick={onOpenSubscriberArea}
+              className={`w-full py-2.5 px-3 rounded-xl text-xs font-bold flex items-center justify-between transition cursor-pointer border shadow-sm ${
+                isProUser
+                  ? 'bg-gradient-to-r from-amber-500/20 to-amber-600/10 border-amber-500/40 text-amber-300 hover:bg-amber-500/25'
+                  : 'bg-gradient-to-r from-amber-500/15 via-amber-600/10 to-amber-700/5 border-amber-500/30 text-amber-300 hover:border-amber-400/50'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <Crown className="w-4 h-4 text-amber-400 shrink-0" />
+                <span className="truncate">Área VIP & Risco</span>
+              </div>
+              <span className="px-1.5 py-0.5 rounded bg-amber-400/20 text-amber-300 text-[9px] font-black uppercase shrink-0">
+                {isProUser ? 'VIP' : 'PRO'}
+              </span>
+            </button>
+          )}
         </div>
 
         {/* Indicator Toggles (Active when on Analysis Tab) */}
@@ -115,7 +141,7 @@ export const Navigation: React.FC<Props> = ({
               <span>Indicadores no Gráfico</span>
             </div>
 
-            <div className="space-y-1.5 bg-[#101914] p-2.5 rounded-xl border border-[#22332B] text-xs">
+            <div className="space-y-1 bg-[#101914] p-2.5 rounded-xl border border-[#22332B] text-xs">
               <label className="flex items-center justify-between cursor-pointer py-1 text-zinc-300 hover:text-white select-none">
                 <span>Médias (EMA9, SMA20/50/200)</span>
                 <input
@@ -190,7 +216,7 @@ export const Navigation: React.FC<Props> = ({
             <button
               key={tab.id}
               onClick={() => onTabChange(tab.id)}
-              className={`flex flex-col items-center justify-center min-h-[46px] min-w-[54px] rounded-xl px-2 py-1 transition cursor-pointer ${
+              className={`flex flex-col items-center justify-center min-h-[46px] min-w-[50px] rounded-xl px-1.5 py-1 transition cursor-pointer ${
                 isActive
                   ? 'text-[#00E6A0] font-bold'
                   : 'text-zinc-400 hover:text-zinc-200'
@@ -201,6 +227,17 @@ export const Navigation: React.FC<Props> = ({
             </button>
           );
         })}
+
+        {/* Mobile VIP quick access */}
+        {onOpenSubscriberArea && (
+          <button
+            onClick={onOpenSubscriberArea}
+            className="flex flex-col items-center justify-center min-h-[46px] min-w-[50px] rounded-xl px-1.5 py-1 text-amber-400 hover:text-amber-300 transition cursor-pointer"
+          >
+            <Crown className="w-5 h-5 mb-0.5" />
+            <span className="text-[10px] tracking-tight font-bold">VIP</span>
+          </button>
+        )}
       </nav>
     </>
   );

@@ -9,8 +9,10 @@ const PORT = 3000;
 app.use(express.json({ limit: '15mb' }));
 
 // Lazy Google Gen AI initialization
-function getGeminiClient(): GoogleGenAI | null {
-  const apiKey = process.env.GEMINI_API_KEY;
+function getGeminiClient(customApiKey?: string): GoogleGenAI | null {
+  const apiKey = (customApiKey && customApiKey.trim().length > 10)
+    ? customApiKey.trim()
+    : process.env.GEMINI_API_KEY;
   if (!apiKey) return null;
   return new GoogleGenAI({ apiKey });
 }
@@ -85,8 +87,8 @@ function generateSyntheticCandles(ticker: string, days = 250): Array<{
 // -------------------------------------------------------------
 // Helper: Normalize Ticker (B3 Brazilian Stocks, Crypto & US)
 // -------------------------------------------------------------
-function normalizeTicker(raw: string): string {
-  if (!raw) return 'PETR4.SA';
+function normalizeTicker(raw: string, market = 'B3'): string {
+  if (!raw) return market === 'EUA' ? 'AAPL' : 'PETR4.SA';
   let t = raw.trim().toUpperCase();
 
   // If already has exchange suffix
@@ -97,7 +99,12 @@ function normalizeTicker(raw: string): string {
     return `${t}-USD`;
   }
 
-  // Brazilian B3 stocks: 4 uppercase letters followed by 1 or 2 digits (e.g. PETR4, VALE3, WEGE3, B3SA3, KLBN11)
+  // If market is explicitly EUA, do not append .SA
+  if (market === 'EUA') {
+    return t;
+  }
+
+  // Brazilian B3 stocks, BDRs, ETFs: 4 uppercase letters followed by 1 or 2 digits (e.g. PETR4, VALE3, WEGE3, B3SA3, KLBN11, AAPL34, BOVA11)
   if (/^[A-Z]{4}[0-9]{1,2}F?$/.test(t)) {
     return `${t}.SA`;
   }
@@ -204,7 +211,8 @@ async function fetchYahooData(ticker: string, period = '1y', interval = '1d'): P
 // -------------------------------------------------------------
 app.get('/api/market/history', async (req, res) => {
   const rawTicker = (req.query.ticker as string) || 'PETR4.SA';
-  const ticker = normalizeTicker(rawTicker);
+  const market = (req.query.market as string) || 'B3';
+  const ticker = normalizeTicker(rawTicker, market);
   const period = (req.query.period as string) || '1y';
   const interval = (req.query.interval as string) || '1d';
 
@@ -375,58 +383,142 @@ interface ScannerAsset {
 }
 
 const SCANNER_UNIVERSE: ScannerAsset[] = [
-  // Top Liquid B3 Brazilian Stocks
+  // ==========================================
+  // 1. AÇÕES BRASIL B3 (Ibovespa & Principais)
+  // ==========================================
   { ticker: 'PETR4.SA', nome: 'Petrobras PN', categoria: 'B3', classe: 'Ação', setor: 'Petróleo & Gás' },
   { ticker: 'VALE3.SA', nome: 'Vale ON', categoria: 'B3', classe: 'Ação', setor: 'Mineração & Materiais' },
   { ticker: 'ITUB4.SA', nome: 'Itaú Unibanco PN', categoria: 'B3', classe: 'Ação', setor: 'Financeiro & Bancos' },
   { ticker: 'BBDC4.SA', nome: 'Bradesco PN', categoria: 'B3', classe: 'Ação', setor: 'Financeiro & Bancos' },
   { ticker: 'BBAS3.SA', nome: 'Banco do Brasil ON', categoria: 'B3', classe: 'Ação', setor: 'Financeiro & Bancos' },
   { ticker: 'ITSA4.SA', nome: 'Itaúsa PN', categoria: 'B3', classe: 'Ação', setor: 'Financeiro & Bancos' },
+  { ticker: 'BPAC11.SA', nome: 'BTG Pactual UNT', categoria: 'B3', classe: 'Ação', setor: 'Financeiro & Bancos' },
+  { ticker: 'SANB11.SA', nome: 'Banco Santander UNT', categoria: 'B3', classe: 'Ação', setor: 'Financeiro & Bancos' },
+  { ticker: 'B3SA3.SA', nome: 'B3 ON', categoria: 'B3', classe: 'Ação', setor: 'Financeiro & Bancos' },
   { ticker: 'WEGE3.SA', nome: 'WEG ON', categoria: 'B3', classe: 'Ação', setor: 'Transporte & Indústria' },
   { ticker: 'PRIO3.SA', nome: 'PRIO ON', categoria: 'B3', classe: 'Ação', setor: 'Petróleo & Gás' },
+  { ticker: 'CSAN3.SA', nome: 'Cosan ON', categoria: 'B3', classe: 'Ação', setor: 'Petróleo & Gás' },
+  { ticker: 'RECV3.SA', nome: 'PetroRecôncavo ON', categoria: 'B3', classe: 'Ação', setor: 'Petróleo & Gás' },
   { ticker: 'RENT3.SA', nome: 'Localiza ON', categoria: 'B3', classe: 'Ação', setor: 'Transporte & Indústria' },
+  { ticker: 'RAIL3.SA', nome: 'Rumo ON', categoria: 'B3', classe: 'Ação', setor: 'Transporte & Indústria' },
+  { ticker: 'EMBR3.SA', nome: 'Embraer ON', categoria: 'B3', classe: 'Ação', setor: 'Transporte & Indústria' },
   { ticker: 'MGLU3.SA', nome: 'Magazine Luiza ON', categoria: 'B3', classe: 'Ação', setor: 'Consumo & Varejo' },
+  { ticker: 'LREN3.SA', nome: 'Lojas Renner ON', categoria: 'B3', classe: 'Ação', setor: 'Consumo & Varejo' },
+  { ticker: 'ABEV3.SA', nome: 'Ambev ON', categoria: 'B3', classe: 'Ação', setor: 'Consumo & Varejo' },
+  { ticker: 'JBSS3.SA', nome: 'JBS ON', categoria: 'B3', classe: 'Ação', setor: 'Consumo & Varejo' },
+  { ticker: 'BRFS3.SA', nome: 'BRF S.A. ON', categoria: 'B3', classe: 'Ação', setor: 'Consumo & Varejo' },
+  { ticker: 'ASAI3.SA', nome: 'Assaí ON', categoria: 'B3', classe: 'Ação', setor: 'Consumo & Varejo' },
+  { ticker: 'CRFB3.SA', nome: 'Carrefour Brasil ON', categoria: 'B3', classe: 'Ação', setor: 'Consumo & Varejo' },
   { ticker: 'SUZB3.SA', nome: 'Suzano ON', categoria: 'B3', classe: 'Ação', setor: 'Mineração & Materiais' },
+  { ticker: 'KLBN11.SA', nome: 'Klabin UNT', categoria: 'B3', classe: 'Ação', setor: 'Mineração & Materiais' },
   { ticker: 'GGBR4.SA', nome: 'Gerdau PN', categoria: 'B3', classe: 'Ação', setor: 'Mineração & Materiais' },
   { ticker: 'CSNA3.SA', nome: 'CSN ON', categoria: 'B3', classe: 'Ação', setor: 'Mineração & Materiais' },
+  { ticker: 'USIM5.SA', nome: 'Usiminas PNA', categoria: 'B3', classe: 'Ação', setor: 'Mineração & Materiais' },
+  { ticker: 'CMIN3.SA', nome: 'CSN Mineração ON', categoria: 'B3', classe: 'Ação', setor: 'Mineração & Materiais' },
   { ticker: 'RADL3.SA', nome: 'Raia Drogasil ON', categoria: 'B3', classe: 'Ação', setor: 'Saúde' },
+  { ticker: 'HAPV3.SA', nome: 'Hapvida ON', categoria: 'B3', classe: 'Ação', setor: 'Saúde' },
   { ticker: 'ELET3.SA', nome: 'Eletrobras ON', categoria: 'B3', classe: 'Ação', setor: 'Energia & Saneamento' },
   { ticker: 'EQTL3.SA', nome: 'Equatorial ON', categoria: 'B3', classe: 'Ação', setor: 'Energia & Saneamento' },
   { ticker: 'CMIG4.SA', nome: 'Cemig PN', categoria: 'B3', classe: 'Ação', setor: 'Energia & Saneamento' },
   { ticker: 'CPLE6.SA', nome: 'Copel PNB', categoria: 'B3', classe: 'Ação', setor: 'Energia & Saneamento' },
-  { ticker: 'ABEV3.SA', nome: 'Ambev ON', categoria: 'B3', classe: 'Ação', setor: 'Consumo & Varejo' },
-  { ticker: 'JBSS3.SA', nome: 'JBS ON', categoria: 'B3', classe: 'Ação', setor: 'Consumo & Varejo' },
-  { ticker: 'EMBR3.SA', nome: 'Embraer ON', categoria: 'B3', classe: 'Ação', setor: 'Transporte & Indústria' },
-  { ticker: 'B3SA3.SA', nome: 'B3 ON', categoria: 'B3', classe: 'Ação', setor: 'Financeiro & Bancos' },
-  { ticker: 'RAIL3.SA', nome: 'Rumo ON', categoria: 'B3', classe: 'Ação', setor: 'Transporte & Indústria' },
-  { ticker: 'HAPV3.SA', nome: 'Hapvida ON', categoria: 'B3', classe: 'Ação', setor: 'Saúde' },
+  { ticker: 'TAEE11.SA', nome: 'Taesa UNT', categoria: 'B3', classe: 'Ação', setor: 'Energia & Saneamento' },
+  { ticker: 'TRPL4.SA', nome: 'ISA Cteep PN', categoria: 'B3', classe: 'Ação', setor: 'Energia & Saneamento' },
+  { ticker: 'SAPR11.SA', nome: 'Sanepar UNT', categoria: 'B3', classe: 'Ação', setor: 'Energia & Saneamento' },
+  { ticker: 'ENEV3.SA', nome: 'Eneva ON', categoria: 'B3', classe: 'Ação', setor: 'Energia & Saneamento' },
   { ticker: 'VIVT3.SA', nome: 'Telefônica Brasil ON', categoria: 'B3', classe: 'Ação', setor: 'Telecom & Mídia' },
-  { ticker: 'KLBN11.SA', nome: 'Klabin UNT', categoria: 'B3', classe: 'Ação', setor: 'Mineração & Materiais' },
-  // BDRs B3
-  { ticker: 'AAPL34.SA', nome: 'Apple BDR', categoria: 'B3', classe: 'BDR', setor: 'Tecnologia' },
+  { ticker: 'TIMS3.SA', nome: 'TIM Brasil ON', categoria: 'B3', classe: 'Ação', setor: 'Telecom & Mídia' },
+  { ticker: 'CYRE3.SA', nome: 'Cyrela ON', categoria: 'B3', classe: 'Ação', setor: 'Construção & Imobiliário' },
+  { ticker: 'MRVE3.SA', nome: 'MRV ON', categoria: 'B3', classe: 'Ação', setor: 'Construção & Imobiliário' },
+  { ticker: 'MULT3.SA', nome: 'Multiplan ON', categoria: 'B3', classe: 'Ação', setor: 'Construção & Imobiliário' },
+  { ticker: 'TOTS3.SA', nome: 'Totvs ON', categoria: 'B3', classe: 'Ação', setor: 'Tecnologia' },
+  { ticker: 'AZUL4.SA', nome: 'Azul PN', categoria: 'B3', classe: 'Ação', setor: 'Transporte & Indústria' },
+  { ticker: 'SLCE3.SA', nome: 'SLC Agrícola ON', categoria: 'B3', classe: 'Ação', setor: 'Agronegócio' },
+
+  // ==========================================
+  // 2. BDRs B3 (Ações Globais na Bolsa Brasil)
+  // ==========================================
   { ticker: 'NVDC34.SA', nome: 'NVIDIA BDR', categoria: 'B3', classe: 'BDR', setor: 'Tecnologia' },
+  { ticker: 'AAPL34.SA', nome: 'Apple BDR', categoria: 'B3', classe: 'BDR', setor: 'Tecnologia' },
   { ticker: 'MSFT34.SA', nome: 'Microsoft BDR', categoria: 'B3', classe: 'BDR', setor: 'Tecnologia' },
   { ticker: 'TSLA34.SA', nome: 'Tesla BDR', categoria: 'B3', classe: 'BDR', setor: 'Tecnologia' },
-  // ETFs B3
+  { ticker: 'AMZO34.SA', nome: 'Amazon BDR', categoria: 'B3', classe: 'BDR', setor: 'Tecnologia' },
+  { ticker: 'GOGL34.SA', nome: 'Alphabet (Google) BDR', categoria: 'B3', classe: 'BDR', setor: 'Tecnologia' },
+  { ticker: 'META34.SA', nome: 'Meta (Facebook) BDR', categoria: 'B3', classe: 'BDR', setor: 'Tecnologia' },
+  { ticker: 'NFLX34.SA', nome: 'Netflix BDR', categoria: 'B3', classe: 'BDR', setor: 'Telecom & Mídia' },
+  { ticker: 'MELI34.SA', nome: 'Mercado Livre BDR', categoria: 'B3', classe: 'BDR', setor: 'Consumo & Varejo' },
+  { ticker: 'DISB34.SA', nome: 'Disney BDR', categoria: 'B3', classe: 'BDR', setor: 'Telecom & Mídia' },
+  { ticker: 'BABA34.SA', nome: 'Alibaba BDR', categoria: 'B3', classe: 'BDR', setor: 'Consumo & Varejo' },
+  { ticker: 'COCA34.SA', nome: 'Coca-Cola BDR', categoria: 'B3', classe: 'BDR', setor: 'Consumo & Varejo' },
+  { ticker: 'WALM34.SA', nome: 'Walmart BDR', categoria: 'B3', classe: 'BDR', setor: 'Consumo & Varejo' },
+  { ticker: 'NKEG34.SA', nome: 'Nike BDR', categoria: 'B3', classe: 'BDR', setor: 'Consumo & Varejo' },
+  { ticker: 'BERK34.SA', nome: 'Berkshire Hathaway BDR', categoria: 'B3', classe: 'BDR', setor: 'Financeiro' },
+  { ticker: 'JNJB34.SA', nome: 'Johnson & Johnson BDR', categoria: 'B3', classe: 'BDR', setor: 'Saúde' },
+  { ticker: 'PFIZ34.SA', nome: 'Pfizer BDR', categoria: 'B3', classe: 'BDR', setor: 'Saúde' },
+  { ticker: 'AMDG34.SA', nome: 'AMD BDR', categoria: 'B3', classe: 'BDR', setor: 'Tecnologia' },
+  { ticker: 'INTC34.SA', nome: 'Intel BDR', categoria: 'B3', classe: 'BDR', setor: 'Tecnologia' },
+  { ticker: 'AVGO34.SA', nome: 'Broadcom BDR', categoria: 'B3', classe: 'BDR', setor: 'Tecnologia' },
+
+  // ==========================================
+  // 3. ETFs (B3 & Globais)
+  // ==========================================
   { ticker: 'BOVA11.SA', nome: 'iShares Ibovespa ETF', categoria: 'B3', classe: 'ETF', setor: 'ETFs & Índices' },
   { ticker: 'SMAL11.SA', nome: 'iShares Small Cap ETF', categoria: 'B3', classe: 'ETF', setor: 'ETFs & Índices' },
-  { ticker: 'IVVB11.SA', nome: 'iShares S&P 500 ETF', categoria: 'B3', classe: 'ETF', setor: 'ETFs & Índices' },
-  // FIIs (Fundos Imobiliários)
-  { ticker: 'HGLG11.SA', nome: 'CSHG Logística FII', categoria: 'B3', classe: 'FII', setor: 'Fundos Imobiliários' },
-  { ticker: 'MXRF11.SA', nome: 'Maxi Renda FII', categoria: 'B3', classe: 'FII', setor: 'Fundos Imobiliários' },
-  { ticker: 'XPML11.SA', nome: 'XP Malls FII', categoria: 'B3', classe: 'FII', setor: 'Fundos Imobiliários' },
-  // US Leading Equities
+  { ticker: 'IVVB11.SA', nome: 'iShares S&P 500 ETF (BRL)', categoria: 'B3', classe: 'ETF', setor: 'ETFs & Índices' },
+  { ticker: 'NASD11.SA', nome: 'Trend Nasdaq 100 ETF (BRL)', categoria: 'B3', classe: 'ETF', setor: 'ETFs & Índices' },
+  { ticker: 'HASH11.SA', nome: 'Hashdex Cripto ETF', categoria: 'B3', classe: 'ETF', setor: 'ETFs & Índices' },
+  { ticker: 'GOLD11.SA', nome: 'Trend Ouro ETF', categoria: 'B3', classe: 'ETF', setor: 'ETFs & Índices' },
+  { ticker: 'XINA11.SA', nome: 'Trend China ETF (BRL)', categoria: 'B3', classe: 'ETF', setor: 'ETFs & Índices' },
+  { ticker: 'BRAX11.SA', nome: 'iShares IBrX 100 ETF', categoria: 'B3', classe: 'ETF', setor: 'ETFs & Índices' },
+  { ticker: 'DIVO11.SA', nome: 'It Now IDIV Dividendos ETF', categoria: 'B3', classe: 'ETF', setor: 'ETFs & Índices' },
+  { ticker: 'SPY', nome: 'SPDR S&P 500 ETF Trust (USD)', categoria: 'EUA', classe: 'ETF', setor: 'ETFs & Índices' },
+  { ticker: 'QQQ', nome: 'Invesco QQQ Trust Nasdaq (USD)', categoria: 'EUA', classe: 'ETF', setor: 'ETFs & Índices' },
+  { ticker: 'VOO', nome: 'Vanguard S&P 500 ETF (USD)', categoria: 'EUA', classe: 'ETF', setor: 'ETFs & Índices' },
+  { ticker: 'DIA', nome: 'SPDR Dow Jones ETF (USD)', categoria: 'EUA', classe: 'ETF', setor: 'ETFs & Índices' },
+  { ticker: 'IWM', nome: 'iShares Russell 2000 ETF (USD)', categoria: 'EUA', classe: 'ETF', setor: 'ETFs & Índices' },
+
+  // ==========================================
+  // 4. MERCADO AMERICANO (EUA - NYSE & NASDAQ)
+  // ==========================================
+  { ticker: 'NVDA', nome: 'NVIDIA Corporation', categoria: 'EUA', classe: 'Ação', setor: 'Tecnologia' },
   { ticker: 'AAPL', nome: 'Apple Inc.', categoria: 'EUA', classe: 'Ação', setor: 'Tecnologia' },
-  { ticker: 'NVDA', nome: 'NVIDIA Corp.', categoria: 'EUA', classe: 'Ação', setor: 'Tecnologia' },
-  { ticker: 'MSFT', nome: 'Microsoft Corp.', categoria: 'EUA', classe: 'Ação', setor: 'Tecnologia' },
+  { ticker: 'MSFT', nome: 'Microsoft Corporation', categoria: 'EUA', classe: 'Ação', setor: 'Tecnologia' },
   { ticker: 'TSLA', nome: 'Tesla Inc.', categoria: 'EUA', classe: 'Ação', setor: 'Tecnologia' },
   { ticker: 'AMZN', nome: 'Amazon.com Inc.', categoria: 'EUA', classe: 'Ação', setor: 'Tecnologia' },
   { ticker: 'META', nome: 'Meta Platforms Inc.', categoria: 'EUA', classe: 'Ação', setor: 'Tecnologia' },
-  { ticker: 'GOOGL', nome: 'Alphabet Inc.', categoria: 'EUA', classe: 'Ação', setor: 'Tecnologia' },
-  // Leading Cryptocurrencies
-  { ticker: 'BTC-USD', nome: 'Bitcoin', categoria: 'Cripto', classe: 'Cripto', setor: 'Criptoativos' },
-  { ticker: 'ETH-USD', nome: 'Ethereum', categoria: 'Cripto', classe: 'Cripto', setor: 'Criptoativos' },
-  { ticker: 'SOL-USD', nome: 'Solana', categoria: 'Cripto', classe: 'Cripto', setor: 'Criptoativos' },
+  { ticker: 'GOOGL', nome: 'Alphabet Inc. (Google)', categoria: 'EUA', classe: 'Ação', setor: 'Tecnologia' },
+  { ticker: 'AMD', nome: 'Advanced Micro Devices', categoria: 'EUA', classe: 'Ação', setor: 'Tecnologia' },
+  { ticker: 'NFLX', nome: 'Netflix Inc.', categoria: 'EUA', classe: 'Ação', setor: 'Telecom & Mídia' },
+  { ticker: 'AVGO', nome: 'Broadcom Inc.', categoria: 'EUA', classe: 'Ação', setor: 'Tecnologia' },
+  { ticker: 'BRK-B', nome: 'Berkshire Hathaway Cl B', categoria: 'EUA', classe: 'Ação', setor: 'Financeiro' },
+  { ticker: 'JPM', nome: 'JPMorgan Chase & Co.', categoria: 'EUA', classe: 'Ação', setor: 'Financeiro' },
+  { ticker: 'V', nome: 'Visa Inc.', categoria: 'EUA', classe: 'Ação', setor: 'Financeiro' },
+  { ticker: 'MA', nome: 'Mastercard Incorporated', categoria: 'EUA', classe: 'Ação', setor: 'Financeiro' },
+  { ticker: 'WMT', nome: 'Walmart Inc.', categoria: 'EUA', classe: 'Ação', setor: 'Consumo & Varejo' },
+  { ticker: 'COST', nome: 'Costco Wholesale Corp.', categoria: 'EUA', classe: 'Ação', setor: 'Consumo & Varejo' },
+  { ticker: 'PG', nome: 'Procter & Gamble Co.', categoria: 'EUA', classe: 'Ação', setor: 'Consumo & Varejo' },
+  { ticker: 'HD', nome: 'The Home Depot Inc.', categoria: 'EUA', classe: 'Ação', setor: 'Consumo & Varejo' },
+  { ticker: 'UNH', nome: 'UnitedHealth Group Inc.', categoria: 'EUA', classe: 'Ação', setor: 'Saúde' },
+  { ticker: 'JNJ', nome: 'Johnson & Johnson', categoria: 'EUA', classe: 'Ação', setor: 'Saúde' },
+  { ticker: 'LLY', nome: 'Eli Lilly and Company', categoria: 'EUA', classe: 'Ação', setor: 'Saúde' },
+  { ticker: 'DIS', nome: 'The Walt Disney Company', categoria: 'EUA', classe: 'Ação', setor: 'Telecom & Mídia' },
+  { ticker: 'CRM', nome: 'Salesforce Inc.', categoria: 'EUA', classe: 'Ação', setor: 'Tecnologia' },
+  { ticker: 'INTC', nome: 'Intel Corporation', categoria: 'EUA', classe: 'Ação', setor: 'Tecnologia' },
+  { ticker: 'PYPL', nome: 'PayPal Holdings Inc.', categoria: 'EUA', classe: 'Ação', setor: 'Financeiro' },
+  { ticker: 'UBER', nome: 'Uber Technologies Inc.', categoria: 'EUA', classe: 'Ação', setor: 'Transporte & Indústria' },
+  { ticker: 'COIN', nome: 'Coinbase Global Inc.', categoria: 'EUA', classe: 'Ação', setor: 'Financeiro' },
+  { ticker: 'PLTR', nome: 'Palantir Technologies', categoria: 'EUA', classe: 'Ação', setor: 'Tecnologia' },
+  { ticker: 'ARM', nome: 'Arm Holdings plc', categoria: 'EUA', classe: 'Ação', setor: 'Tecnologia' },
+  { ticker: 'SMCI', nome: 'Super Micro Computer', categoria: 'EUA', classe: 'Ação', setor: 'Tecnologia' },
+  { ticker: 'XOM', nome: 'Exxon Mobil Corporation', categoria: 'EUA', classe: 'Ação', setor: 'Petróleo & Gás' },
+  { ticker: 'CVX', nome: 'Chevron Corporation', categoria: 'EUA', classe: 'Ação', setor: 'Petróleo & Gás' },
+  { ticker: 'BA', nome: 'The Boeing Company', categoria: 'EUA', classe: 'Ação', setor: 'Transporte & Indústria' },
+
+  // ==========================================
+  // 5. CRIPTOATIVOS LÍDERES
+  // ==========================================
+  { ticker: 'BTC-USD', nome: 'Bitcoin (USD)', categoria: 'Cripto', classe: 'Cripto', setor: 'Criptoativos' },
+  { ticker: 'ETH-USD', nome: 'Ethereum (USD)', categoria: 'Cripto', classe: 'Cripto', setor: 'Criptoativos' },
+  { ticker: 'SOL-USD', nome: 'Solana (USD)', categoria: 'Cripto', classe: 'Cripto', setor: 'Criptoativos' },
 ];
 
 // -------------------------------------------------------------
@@ -435,6 +527,7 @@ const SCANNER_UNIVERSE: ScannerAsset[] = [
 app.get('/api/market/scanner', async (req, res) => {
   const force = req.query.force === 'true';
   const categoryFilter = (req.query.category as string) || 'Todos';
+  const classeFilter = (req.query.classe as string) || 'Todos';
   const now = Date.now();
 
   // Return cached result if fresh (< 3 minutes) and not forced
@@ -442,6 +535,9 @@ app.get('/api/market/scanner', async (req, res) => {
     let list = scannerCache.opportunities;
     if (categoryFilter !== 'Todos') {
       list = list.filter((item) => item.categoria === categoryFilter);
+    }
+    if (classeFilter !== 'Todos') {
+      list = list.filter((item) => item.classe === classeFilter);
     }
     return res.json({
       opportunities: list,
@@ -627,6 +723,9 @@ app.get('/api/market/scanner', async (req, res) => {
   if (categoryFilter !== 'Todos') {
     filtered = filtered.filter((item) => item.categoria === categoryFilter);
   }
+  if (classeFilter !== 'Todos') {
+    filtered = filtered.filter((item) => item.classe === classeFilter);
+  }
 
   res.json({
     opportunities: filtered,
@@ -804,12 +903,76 @@ app.get('/api/market/news', async (req, res) => {
 });
 
 // -------------------------------------------------------------
-// Endpoint 4: AI Technical Analysis (Gemini 3.8 Flash with deterministic fallback)
+// Resilient Gemini Generation with Multi-Model Fallback and Retry
+// -------------------------------------------------------------
+async function generateGeminiWithFallback(
+  contents: any,
+  modelsToTry: string[] = ['gemini-3.8-flash', 'gemini-flash-latest', 'gemini-3.1-flash-lite'],
+  customApiKey?: string
+): Promise<string | null> {
+  const ai = getGeminiClient(customApiKey);
+  if (!ai) return null;
+
+  for (const model of modelsToTry) {
+    try {
+      const response = await ai.models.generateContent({
+        model,
+        contents,
+      });
+
+      const text = response.text;
+      if (text && text.trim().length > 0) {
+        return text;
+      }
+    } catch (err: any) {
+      const errMsg = err?.message || String(err);
+      const isOverloaded =
+        errMsg.includes('503') ||
+        errMsg.includes('high demand') ||
+        errMsg.includes('UNAVAILABLE') ||
+        errMsg.includes('429') ||
+        errMsg.includes('RESOURCE_EXHAUSTED');
+
+      if (isOverloaded) {
+        console.warn(`[Gemini API] Modelo '${model}' em alta demanda (503/429). Tentando próximo modelo...`);
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        continue;
+      }
+
+      console.warn(`[Gemini API] Tentativa com '${model}' não concluída: ${errMsg.slice(0, 120)}`);
+    }
+  }
+
+  return null;
+}
+
+// -------------------------------------------------------------
+// Endpoint 3.5: Instant Global Asset Search & Autocomplete
+// -------------------------------------------------------------
+app.get('/api/market/search', (req, res) => {
+  const q = ((req.query.q as string) || '').trim().toUpperCase();
+  if (!q) {
+    return res.json({ results: SCANNER_UNIVERSE.slice(0, 12) });
+  }
+
+  const results = SCANNER_UNIVERSE.filter((item) => {
+    const t = item.ticker.toUpperCase();
+    const n = item.nome.toUpperCase();
+    const s = item.setor.toUpperCase();
+    const c = item.classe.toUpperCase();
+    return t.includes(q) || n.includes(q) || s.includes(q) || c.includes(q);
+  });
+
+  return res.json({ results: results.slice(0, 20) });
+});
+
+// -------------------------------------------------------------
+// Endpoint 4: AI Technical Analysis (Gemini with multi-model fallback & deterministic backup)
 // -------------------------------------------------------------
 app.post('/api/ai/analyze', async (req, res) => {
+  const customKey = (req.headers['x-gemini-key'] as string) || req.body.customApiKey;
   const {
     ticker,
-    language = 'Português',
     currentPrice,
     rsi,
     atr,
@@ -818,6 +981,7 @@ app.post('/api/ai/analyze', async (req, res) => {
     signals,
     stop,
     alvo,
+    language = 'Português',
   } = req.body;
 
   const prompt = `Você é um analista técnico sênior certificado CNPI e especialista em Swing Trade.
@@ -838,21 +1002,9 @@ Forneça uma análise técnica concisa, profissional e direta em ${language}, es
 3. Zonas de Decisão (Entrada, Stop e Alvo)
 4. Considerações Finais e Gestão de Risco`;
 
-  try {
-    const ai = getGeminiClient();
-    if (ai) {
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
-        contents: prompt,
-      });
-
-      const text = response.text;
-      if (text) {
-        return res.json({ analysis: text });
-      }
-    }
-  } catch (err) {
-    console.error('Erro Gemini API:', err);
+  const aiText = await generateGeminiWithFallback(prompt, undefined, customKey);
+  if (aiText) {
+    return res.json({ analysis: aiText });
   }
 
   // Deterministic professional technical fallback
@@ -891,16 +1043,14 @@ Recomenda-se posicionar ordens com dimensionamento de lote proporcional a no má
 // Endpoint 5: AI Multimodal Chart Image Scanner
 // -------------------------------------------------------------
 app.post('/api/ai/analyze-image', async (req, res) => {
+  const customKey = (req.headers['x-gemini-key'] as string) || req.body.customApiKey;
   const { image, mimeType = 'image/png', language = 'Português', context = '' } = req.body;
 
   if (!image) {
     return res.status(400).json({ error: 'Imagem não fornecida.' });
   }
 
-  try {
-    const ai = getGeminiClient();
-    if (ai) {
-      const prompt = `Você é um analista técnico profissional especialista em Price Action e leitura gráfica.
+  const prompt = `Você é um analista técnico profissional especialista em Price Action e leitura gráfica.
 Examine cuidadosamente a imagem do gráfico enviada.
 Contexto adicional do usuário: ${context || 'Nenhum'}.
 
@@ -910,29 +1060,22 @@ Forneça uma análise técnica visual detalhada em ${language} com os seguintes 
 3. Indicadores visíveis (médias móveis, volume, osciladores) e sua inclinação.
 4. Cenário mais provável (continuidade ou reversão) e pontos de atenção para gestão de risco.`;
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
-        contents: [
-          {
-            inlineData: {
-              data: image,
-              mimeType: mimeType,
-            },
-          },
-          prompt,
-        ],
-      });
+  const contents = [
+    {
+      inlineData: {
+        data: image,
+        mimeType: mimeType,
+      },
+    },
+    prompt,
+  ];
 
-      const text = response.text;
-      if (text) {
-        return res.json({ analysis: text });
-      }
-    }
-  } catch (err) {
-    console.error('Erro Gemini Vision:', err);
+  const aiText = await generateGeminiWithFallback(contents, undefined, customKey);
+  if (aiText) {
+    return res.json({ analysis: aiText });
   }
 
-  // Fallback response if no vision API key
+  // Fallback response if vision API is temporarily unavailable
   const fallbackVisionText = `### Leitura Técnica do Gráfico Enviado
 1. **Identificação e Padrão Visual:** O gráfico demonstra formação de topos e fundos com consolidação na faixa intermediária de preços.
 2. **Candlesticks e Price Action:** Observa-se candles de teste em regiões de suporte recente, com sombras inferiores que indicam presença compradora de absorção.
@@ -948,6 +1091,7 @@ Forneça uma análise técnica visual detalhada em ${language} com os seguintes 
 // top candidates and highlights the best swing opportunities.
 // -------------------------------------------------------------
 app.post('/api/ai/scan', async (req, res) => {
+  const customKey = (req.headers['x-gemini-key'] as string) || req.body?.customApiKey;
   const { language = 'Português', limit = 8 } = req.body || {};
   const source: any[] = scannerCache?.opportunities || [];
   const top = source
@@ -976,27 +1120,16 @@ Seja objetivo e cite os tickers. Finalize com um aviso de que é conteúdo educa
 Ativos varridos (ordenados por score):
 ${linhas}`;
 
-  try {
-    const ai = getGeminiClient();
-    if (ai) {
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
-        contents: prompt,
-      });
-      const text = response.text;
-      if (text) {
-        return res.json({ analysis: text, analisados: top.length });
-      }
-    }
-  } catch (err) {
-    console.error('Erro Gemini Scan:', err);
+  const aiText = await generateGeminiWithFallback(prompt, undefined, customKey);
+  if (aiText) {
+    return res.json({ analysis: aiText, analisados: top.length });
   }
 
-  // Deterministic fallback when no Gemini key is configured.
+  // Deterministic fallback when no Gemini key or temporary spike
   const fmt = (o: any) => `${o.ticker} (${o.setup}, score ${o.score})`;
   const compras = top.filter((o: any) => o.sinal === 'COMPRA FORTE' || o.sinal === 'COMPRA');
   const vendas = top.filter((o: any) => o.sinal === 'VENDA');
-  const fallback = `### Panorama por IA (resumo local)
+  const fallback = `### Panorama por IA (resumo técnico)
 Foram varridos **${top.length}** ativos com sinal técnico relevante.
 
 **Melhores oportunidades de compra:**
@@ -1008,7 +1141,7 @@ ${
 **Atenção / viés vendedor:**
 ${vendas.slice(0, 3).map((o: any) => `- ${fmt(o)} — resistência técnica; cautela para compras.`).join('\n') || 'Sem alertas relevantes.'}
 
-*(Aviso: conteúdo educativo, não é recomendação de investimento. Configure a GEMINI_API_KEY para a leitura completa por IA.)*`;
+*(Aviso: conteúdo educativo, não é recomendação de investimento).*`;
 
   res.json({ analysis: fallback, analisados: top.length });
 });
@@ -1054,7 +1187,7 @@ async function startServer() {
     // Production static files
     const distPath = path.resolve(process.cwd(), 'dist');
     app.use(express.static(distPath));
-    app.get('*', (req, res) => {
+    app.get('*all', (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }

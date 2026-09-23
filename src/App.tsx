@@ -12,7 +12,10 @@ import { TopMoversView } from './components/TopMoversView';
 import { NewsSentimentsView } from './components/NewsSentimentsView';
 import { ChartUploadView } from './components/ChartUploadView';
 import { OpportunitiesScannerView } from './components/OpportunitiesScannerView';
-import { MarketHistoryResponse } from './types';
+import { CapaOpportunitySelector } from './components/CapaOpportunitySelector';
+import { MarketCategoryBar } from './components/MarketCategoryBar';
+import { SubscriberAreaModal } from './components/SubscriberAreaModal';
+import { MarketHistoryResponse, OpportunityItem } from './types';
 import { useOnlineStatus } from './hooks/useOnlineStatus';
 import {
   processAllIndicators,
@@ -22,17 +25,35 @@ import {
   calculateSupportResistance,
   detectPatterns,
 } from './indicators';
-import { AlertCircle, RefreshCw, Calendar, Clock, SlidersHorizontal, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { AlertCircle, RefreshCw, Calendar, Clock, SlidersHorizontal, ArrowUpRight, ArrowDownRight, Sparkles, Target, Radar, Crown, Calculator, Bot } from 'lucide-react';
 
 export const App: React.FC = () => {
   // Navigation & View state
   const [activeTab, setActiveTab] = useState<ActiveTab>('analysis');
 
-  // Market & Ticker state
-  const [marketType, setMarketType] = useState<'B3' | 'EUA'>('B3');
-  const [ticker, setTicker] = useState('PETR4');
+  // Subscriber & Risk Management VIP state
+  const [isSubscriberModalOpen, setIsSubscriberModalOpen] = useState(false);
+  const [isProUser, setIsProUser] = useState<boolean>(() => {
+    return localStorage.getItem('sciencebit_pro_active') === 'true';
+  });
+  const [userApiKey, setUserApiKey] = useState<string>(() => {
+    return localStorage.getItem('sciencebit_gemini_key') || '';
+  });
+
+  // Market & Ticker state (persisted or initialized with intelligent default)
+  const [marketType, setMarketType] = useState<'B3' | 'EUA'>(() => {
+    const saved = localStorage.getItem('capa_market');
+    return (saved === 'EUA' || saved === 'B3') ? saved : 'B3';
+  });
+  const [ticker, setTicker] = useState(() => {
+    return localStorage.getItem('capa_ticker') || 'PETR4';
+  });
   const [period, setPeriod] = useState('1y');
   const [interval, setInterval] = useState('1d');
+
+  // Scanner Opportunities for Capa Selection
+  const [scannerOpportunities, setScannerOpportunities] = useState<OpportunityItem[]>([]);
+  const [loadingScanner, setLoadingScanner] = useState(false);
 
   // Chart Indicators State
   const [showAverages, setShowAverages] = useState(true);
@@ -65,14 +86,16 @@ export const App: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      // If B3, append .SA if not already present
+      // If B3, append .SA if not already present; if EUA, ensure no .SA
       let queryTicker = ticker.trim().toUpperCase();
       if (marketType === 'B3' && !queryTicker.endsWith('.SA')) {
         queryTicker = `${queryTicker}.SA`;
+      } else if (marketType === 'EUA') {
+        queryTicker = queryTicker.replace('.SA', '');
       }
 
       const res = await fetch(
-        `/api/market/history?ticker=${encodeURIComponent(queryTicker)}&period=${period}&interval=${interval}`
+        `/api/market/history?ticker=${encodeURIComponent(queryTicker)}&market=${marketType}&period=${period}&interval=${interval}`
       );
 
       if (!res.ok) {
@@ -127,6 +150,41 @@ export const App: React.FC = () => {
     fetchData();
   }, [fetchData]);
 
+  // Fetch opportunities from scanner to populate the Capa selector
+  const fetchScannerOpportunities = useCallback(async () => {
+    setLoadingScanner(true);
+    try {
+      const res = await fetch('/api/market/scanner?category=Todos');
+      if (res.ok) {
+        const data = await res.json();
+        const ops: OpportunityItem[] = data.opportunities || [];
+        setScannerOpportunities(ops);
+
+        // Se o usuário ainda não escolheu uma ação salva no localStorage,
+        // inicializa a capa com a melhor oportunidade detectada!
+        const savedTicker = localStorage.getItem('capa_ticker');
+        if (!savedTicker && ops.length > 0) {
+          const topOp = ops[0];
+          if (topOp) {
+            const targetMarket = topOp.categoria === 'EUA' ? 'EUA' : 'B3';
+            setTicker(topOp.ticker);
+            setMarketType(targetMarket);
+            localStorage.setItem('capa_ticker', topOp.ticker);
+            localStorage.setItem('capa_market', targetMarket);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Erro ao buscar oportunidades para a capa:', err);
+    } finally {
+      setLoadingScanner(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchScannerOpportunities();
+  }, [fetchScannerOpportunities]);
+
   // Auto Refresh Interval
   useEffect(() => {
     if (!autoRefreshEnabled) return;
@@ -136,9 +194,13 @@ export const App: React.FC = () => {
     return () => clearInterval(timer);
   }, [autoRefreshEnabled, refreshIntervalSec, fetchData]);
 
-  const handleTickerChange = (newTicker: string, newMarket: 'B3' | 'EUA') => {
+  const handleSelectCapaOpportunity = (newTicker: string, newMarket: 'B3' | 'EUA') => {
+    const cleanTicker = newTicker.trim().toUpperCase().replace('.SA', '');
     setMarketType(newMarket);
-    setTicker(newTicker);
+    setTicker(cleanTicker);
+    localStorage.setItem('capa_ticker', cleanTicker);
+    localStorage.setItem('capa_market', newMarket);
+    setActiveTab('analysis');
   };
 
   // Keep a ref to the freshest market data so the AI runner avoids stale closures.
@@ -166,7 +228,10 @@ export const App: React.FC = () => {
       };
       const res = await fetch('/api/ai/analyze', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(userApiKey ? { 'x-gemini-key': userApiKey } : {}),
+        },
         body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error('Falha ao gerar análise por IA.');
@@ -190,18 +255,26 @@ export const App: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [marketData?.ticker, period, interval]);
 
+  const currentOpportunity = scannerOpportunities.find(
+    (o) => o.ticker.toUpperCase() === (marketData?.ticker || ticker).toUpperCase()
+  );
+
   return (
     <div className="min-h-screen bg-[#0A100D] text-[#EAF3EE] flex flex-col pb-16 lg:pb-0">
       {/* Top Header */}
       <Header
         currentTicker={ticker}
         marketType={marketType}
-        onTickerChange={handleTickerChange}
+        onTickerChange={handleSelectCapaOpportunity}
         onRefresh={fetchData}
         isLoading={loading}
         autoRefreshEnabled={autoRefreshEnabled}
         onToggleAutoRefresh={setAutoRefreshEnabled}
         lastUpdated={marketData?.lastUpdated || '--:--:--'}
+        opportunitiesCount={scannerOpportunities.length}
+        onOpenScanner={() => setActiveTab('scanner')}
+        onOpenSubscriberArea={() => setIsSubscriberModalOpen(true)}
+        isProUser={isProUser}
       />
 
       <div className="flex-1 flex max-w-7xl w-full mx-auto">
@@ -220,6 +293,8 @@ export const App: React.FC = () => {
           showLevels={showLevels}
           setShowLevels={setShowLevels}
           onOpenAIModal={() => setIsAIModalOpen(true)}
+          onOpenSubscriberArea={() => setIsSubscriberModalOpen(true)}
+          isProUser={isProUser}
         />
 
         {/* Main Content Area */}
@@ -251,21 +326,41 @@ export const App: React.FC = () => {
           {/* TAB 1: Main Analysis */}
           {activeTab === 'analysis' && marketData && (
             <div className="space-y-4">
+              {/* Barra Seletora de Mercados & Categorias: Ações B3, Mercado Americano, BDRs, ETFs */}
+              <MarketCategoryBar
+                currentTicker={marketData.ticker}
+                marketType={marketType}
+                onSelectTicker={handleSelectCapaOpportunity}
+                opportunities={scannerOpportunities}
+                onOpenOpportunitiesModal={() => {
+                  const el = document.getElementById('secao-oportunidades-radar');
+                  if (el) {
+                    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }
+                }}
+              />
+
               {/* Asset Headline Bar */}
-              <div className="bg-[#101914] rounded-2xl border border-[#22332B] p-4 shadow-xl flex flex-wrap items-center justify-between gap-4">
+              <div id="secao-grafico-capa" className="bg-[#101914] rounded-2xl border border-[#22332B] p-4 shadow-xl flex flex-wrap items-center justify-between gap-4 scroll-mt-20">
                 <div className="flex items-center gap-4">
                   <div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <h1 className="text-xl md:text-2xl font-black text-white font-mono tracking-tight">
                         {marketData.ticker}
                       </h1>
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-[#14201A] border border-[#22332B] text-zinc-400">
-                        {marketType === 'B3' ? 'B3 / BRL' : 'NYSE/NASDAQ'}
+                        {marketType === 'B3' ? 'B3 / BRL' : 'NYSE/NASDAQ (USD)'}
                       </span>
+                      {currentOpportunity && (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-[#00E6A0]/20 text-[#00E6A0] border border-[#00E6A0]/40 flex items-center gap-1 shadow-sm">
+                          <Sparkles className="w-3 h-3 text-[#00E6A0]" />
+                          Oportunidade Radar: {currentOpportunity.setup} ({currentOpportunity.score}%)
+                        </span>
+                      )}
                       {!marketData.isDemo ? (
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-[#00E6A0]/15 text-[#00E6A0] border border-[#00E6A0]/30 flex items-center gap-1">
                           <span className="w-1.5 h-1.5 rounded-full bg-[#00E6A0] animate-pulse" />
-                          Dados Reais B3 / Global
+                          Dados Reais {marketType === 'B3' ? 'B3' : 'Global EUA'}
                         </span>
                       ) : (
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-400 border border-amber-500/30">
@@ -343,13 +438,33 @@ export const App: React.FC = () => {
                       </button>
                     ))}
                   </div>
+
+                  {/* Botão Analisar Gráfico com IA */}
+                  <button
+                    type="button"
+                    onClick={() => setIsAIModalOpen(true)}
+                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-[#00E6A0] to-[#00B37E] hover:from-[#00c98c] hover:to-[#009c6c] text-[#0A100D] text-xs font-black transition cursor-pointer shadow-md shadow-[#00E6A0]/20"
+                    title="Analisar Gráfico com IA através do Google Gemini 3.8 Flash"
+                  >
+                    <Bot className="w-3.5 h-3.5" />
+                    <span>Analisar Gráfico com IA</span>
+                  </button>
+
+                  {/* Botão Atalho Calculadora de Risco & Lote */}
+                  <button
+                    type="button"
+                    onClick={() => setIsSubscriberModalOpen(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500/20 to-amber-600/10 hover:from-amber-500/30 hover:to-amber-600/20 border border-amber-500/40 text-amber-300 text-xs font-bold transition cursor-pointer shadow-sm"
+                    title="Calcular Tamanho de Lote e Gestão de Risco para este Ativo"
+                  >
+                    <Calculator className="w-3.5 h-3.5 text-amber-400" />
+                    <span className="hidden sm:inline">Calculadora de Risco</span>
+                    <span className="sm:hidden">Risco</span>
+                  </button>
                 </div>
               </div>
 
-              {/* 4 Smart Insights metric cards */}
-              <SmartInsights insights={marketData.insights} />
-
-              {/* Candlestick Chart */}
+              {/* GRÁFICO DE CANDLESTICKS IMEDIATAMENTE ABAIXO DO ATIVO */}
               <CandlestickChart
                 data={marketData.candles}
                 showAverages={showAverages}
@@ -360,6 +475,21 @@ export const App: React.FC = () => {
                 levels={marketData.levels}
                 stopTarget={marketData.stopTarget}
               />
+
+              {/* 4 Smart Insights metric cards */}
+              <SmartInsights insights={marketData.insights} />
+
+              {/* Seletor & Lista de Oportunidades do Radar de Mercado */}
+              <div id="secao-oportunidades-radar">
+                <CapaOpportunitySelector
+                  currentTicker={marketData.ticker}
+                  marketType={marketType}
+                  opportunities={scannerOpportunities}
+                  isLoadingOpportunities={loadingScanner}
+                  onSelectOpportunityForCapa={handleSelectCapaOpportunity}
+                  onGoToScanner={() => setActiveTab('scanner')}
+                />
+              </div>
 
               {/* AI graphical reading — centerpiece for the open asset */}
               <AiAnalysisSection
@@ -401,11 +531,8 @@ export const App: React.FC = () => {
           {/* TAB 2: Varredura de Oportunidades & Scanner */}
           {activeTab === 'scanner' && (
             <OpportunitiesScannerView
-              onSelectTicker={(selectedTicker, selectedMarket) => {
-                setMarketType(selectedMarket);
-                setTicker(selectedTicker);
-                setActiveTab('analysis');
-              }}
+              currentCapaTicker={ticker}
+              onSelectTicker={handleSelectCapaOpportunity}
             />
           )}
 
@@ -431,6 +558,23 @@ export const App: React.FC = () => {
           onClose={() => setIsAIModalOpen(false)}
         />
       )}
+
+      {/* Subscriber VIP & Risk Management Modal */}
+      <SubscriberAreaModal
+        isOpen={isSubscriberModalOpen}
+        onClose={() => setIsSubscriberModalOpen(false)}
+        currentTicker={marketData?.ticker || ticker}
+        currentPrice={marketData?.currentPrice || 0}
+        marketType={marketType}
+        calculatedStop={marketData?.stopTarget?.stop}
+        calculatedAlvo={marketData?.stopTarget?.alvo}
+        atr={marketData?.candles[marketData.candles.length - 1]?.ATR}
+        aiAnalysisText={aiText}
+        userApiKey={userApiKey}
+        onApiKeyChange={(key) => setUserApiKey(key)}
+        isProUser={isProUser}
+        setIsProUser={setIsProUser}
+      />
     </div>
   );
 };

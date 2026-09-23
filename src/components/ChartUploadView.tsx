@@ -83,9 +83,13 @@ export const ChartUploadView: React.FC = () => {
 
       const base64Data = await base64Promise;
 
+      const userKey = localStorage.getItem('sciencebit_gemini_key');
       const response = await fetch('/api/ai/analyze-image', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(userKey ? { 'x-gemini-key': userKey } : {}),
+        },
         body: JSON.stringify({
           image: base64Data,
           mimeType: selectedFile.type,

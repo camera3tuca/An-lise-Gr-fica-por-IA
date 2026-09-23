@@ -28,6 +28,7 @@ import { OpportunityDetailModal } from './OpportunityDetailModal';
 
 interface Props {
   onSelectTicker: (ticker: string, market: 'B3' | 'EUA') => void;
+  currentCapaTicker?: string;
 }
 
 const SECTOR_BADGES: Record<string, { badgeClass: string; dotColor: string }> = {
@@ -50,7 +51,7 @@ function getSectorStyle(sector?: string) {
   return SECTOR_BADGES[sector] || { badgeClass: 'bg-zinc-800 text-zinc-300 border-zinc-700', dotColor: 'bg-zinc-400' };
 }
 
-export const OpportunitiesScannerView: React.FC<Props> = ({ onSelectTicker }) => {
+export const OpportunitiesScannerView: React.FC<Props> = ({ onSelectTicker, currentCapaTicker }) => {
   const [opportunities, setOpportunities] = useState<OpportunityItem[]>([]);
   const [summary, setSummary] = useState<ScannerSummary | null>(null);
   const [loading, setLoading] = useState(false);
@@ -102,9 +103,13 @@ export const OpportunitiesScannerView: React.FC<Props> = ({ onSelectTicker }) =>
   const runAiScan = useCallback(async () => {
     setAiScanLoading(true);
     try {
+      const userKey = localStorage.getItem('sciencebit_gemini_key');
       const res = await fetch('/api/ai/scan', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(userKey ? { 'x-gemini-key': userKey } : {}),
+        },
         body: JSON.stringify({ language: 'Português', limit: 12 }),
       });
       const data = await res.json();
@@ -679,7 +684,7 @@ export const OpportunitiesScannerView: React.FC<Props> = ({ onSelectTicker }) =>
                 <th className="py-3 px-4">Sinal & Score</th>
                 <th className="py-3 px-4">Stop Loss (2x ATR)</th>
                 <th className="py-3 px-4">Alvo Gain (1:1.5)</th>
-                <th className="py-3 px-4 text-center">Gráfico & Detalhes</th>
+                <th className="py-3 px-4 text-center">Ações na Capa & Gráfico</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#1A2820] text-xs">
@@ -696,11 +701,14 @@ export const OpportunitiesScannerView: React.FC<Props> = ({ onSelectTicker }) =>
                   const isStrongBuy = op.sinal === 'COMPRA FORTE';
                   const isSell = op.sinal === 'VENDA';
                   const sectorStyle = getSectorStyle(op.setor);
+                  const isCurrentCapa = currentCapaTicker && op.ticker.toUpperCase() === currentCapaTicker.toUpperCase();
 
                   return (
                     <tr
                       key={op.ticker}
-                      className="hover:bg-[#121F18] transition-colors group cursor-pointer"
+                      className={`hover:bg-[#121F18] transition-colors group cursor-pointer ${
+                        isCurrentCapa ? 'bg-[#112419]/70 border-l-2 border-[#00E6A0]' : ''
+                      }`}
                       onClick={() => handleOpenOpportunityDetail(op)}
                     >
                       {/* Ativo & Setor */}
@@ -712,7 +720,13 @@ export const OpportunitiesScannerView: React.FC<Props> = ({ onSelectTicker }) =>
                           <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-sky-950/60 text-sky-300 border border-sky-800/50">
                             {op.classe || op.categoria}
                           </span>
-                          {op.isRealData && (
+                          {isCurrentCapa && (
+                            <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-[#00E6A0] text-[#0A100D] flex items-center gap-1 shadow-sm">
+                              <Check className="w-2.5 h-2.5" />
+                              Ação da Capa
+                            </span>
+                          )}
+                          {op.isRealData && !isCurrentCapa && (
                             <span className="text-[9px] font-semibold px-1 py-0.2 rounded bg-[#00E6A0]/10 text-[#00E6A0]">
                               Real
                             </span>
@@ -854,18 +868,46 @@ export const OpportunitiesScannerView: React.FC<Props> = ({ onSelectTicker }) =>
                         </p>
                       </td>
 
-                      {/* Ação: Ver Gráfico e Detalhes */}
+                      {/* Ações: Exibir na Capa & Ver Gráfico */}
                       <td className="py-3 px-4 text-center whitespace-nowrap">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleOpenOpportunityDetail(op);
-                          }}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#192A20] hover:bg-[#00E6A0] text-zinc-200 hover:text-[#0A100D] text-[11px] font-bold transition cursor-pointer group-hover:bg-[#00E6A0] group-hover:text-[#0A100D] shadow-sm"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                          <span>Ver Gráfico</span>
-                        </button>
+                        <div className="flex items-center justify-center gap-1.5">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onSelectTicker(op.ticker, op.categoria === 'EUA' ? 'EUA' : 'B3');
+                            }}
+                            className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-black transition cursor-pointer shadow-sm ${
+                              isCurrentCapa
+                                ? 'bg-[#1C3626] text-[#00E6A0] border border-[#00E6A0]/40'
+                                : 'bg-[#00E6A0] hover:bg-[#00c98c] text-[#0A100D] shadow-[#00E6A0]/20'
+                            }`}
+                            title="Definir esta ação como a ação selecionada na capa"
+                          >
+                            {isCurrentCapa ? (
+                              <>
+                                <Check className="w-3 h-3" />
+                                <span>Na Capa</span>
+                              </>
+                            ) : (
+                              <>
+                                <Radar className="w-3 h-3" />
+                                <span>Exibir na Capa</span>
+                              </>
+                            )}
+                          </button>
+
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenOpportunityDetail(op);
+                            }}
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#192A20] hover:bg-[#253D2F] text-zinc-300 hover:text-white border border-[#233A2B] text-[11px] font-semibold transition cursor-pointer shadow-sm"
+                            title="Abrir detalhes e gráfico da oportunidade"
+                          >
+                            <Eye className="w-3 h-3" />
+                            <span>Gráfico</span>
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -918,6 +960,7 @@ export const OpportunitiesScannerView: React.FC<Props> = ({ onSelectTicker }) =>
         }
         totalCount={filteredOpportunities.length}
         onOpenFullAnalysis={onSelectTicker}
+        currentCapaTicker={currentCapaTicker}
       />
     </div>
   );

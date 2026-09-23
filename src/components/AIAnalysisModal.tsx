@@ -45,9 +45,13 @@ export const AIAnalysisModal: React.FC<Props> = ({
         alvo: stopTarget?.alvo,
       };
 
+      const userKey = localStorage.getItem('sciencebit_gemini_key');
       const res = await fetch('/api/ai/analyze', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(userKey ? { 'x-gemini-key': userKey } : {}),
+        },
         body: JSON.stringify(payload),
       });
 
@@ -127,7 +131,7 @@ export const AIAnalysisModal: React.FC<Props> = ({
                 className="mt-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#00E6A0] to-[#00B37E] hover:from-[#00c98c] hover:to-[#009c6c] text-[#0A100D] font-bold text-xs shadow-lg shadow-[#00E6A0]/20 flex items-center gap-2 transition cursor-pointer"
               >
                 <Bot className="w-4 h-4" />
-                <span>Gerar Análise Completa</span>
+                <span>Analisar Gráfico com IA</span>
               </button>
             </div>
           )}
