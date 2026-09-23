@@ -1,4 +1,4 @@
-# 📈 Chart AI Plus - Análise Técnica & Swing Trade
+# 📈  Análise Técnica & Swing Trade por IA
 
 Aplicativo profissional de **análise técnica de gráficos da bolsa de valores e cripto**, com foco em **Swing Trade**, desenvolvido em **React, TypeScript, Vite, Express e Tailwind CSS**, arquitetado como **Progressive Web App (PWA)** de alta performance e pronto para publicação na **Google Play Store** via **Trusted Web Activity (TWA)**.
 
